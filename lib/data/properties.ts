@@ -7,6 +7,7 @@ import { createPublicClient } from "@/lib/supabase/public";
 import { mapOffers, type PropertyOffer } from "@/lib/offers";
 import type { PriceBasis } from "@/lib/offers";
 import { matchesPrice } from "@/lib/property-filters";
+import { parseMarketArea, matchesMarketArea, type MarketArea } from "@/lib/market-areas";
 import { defaultLocale, locales, type Locale, type PropertyTranslation } from "@/lib/i18n/config";
 import { localizedContent } from "@/lib/i18n/property-content";
 
@@ -37,6 +38,7 @@ export interface PublicProperty {
   offers: PropertyOffer[];
   propertyType: PropertyType;
   location: string;
+  marketArea?: MarketArea;
   district: string;
   address?: string;
   latitude?: number;
@@ -77,6 +79,7 @@ export interface PropertyVideo {
 }
 
 export interface PropertyFilters {
+  area?: string;
   minPrice?: number;
   maxPrice?: number;
   priceBasis?: PriceBasis;
@@ -122,6 +125,7 @@ function fixtureData(locale: Locale): PublicProperty[] {
       offers: [{ offerType: property.listingType, price: property.price, currency: property.currency, priceBasis: "global", negotiable: false, sortOrder: 0 }],
       propertyType: property.propertyType,
       location: property.location,
+      marketArea: parseMarketArea(property.location),
       district: property.district,
       latitude: property.coordinates?.latitude,
       longitude: property.coordinates?.longitude,
@@ -184,6 +188,7 @@ function mapProperty(row: PropertyRow, publicUrl: (path: string) => string, loca
     offers: mapOffers(row.property_offers),
     propertyType: row.property_type as PropertyType,
     location: String(row.location),
+    marketArea: parseMarketArea(row.market_area),
     district: String(row.district ?? ""),
     address: row.address ? String(row.address) : undefined,
     latitude: numberOrUndefined(row.latitude),
@@ -237,13 +242,14 @@ const fetchPublished = unstable_cache(async (locale: Locale) => {
     const content = localizedContent(row.property_translations ?? [], locale, row);
     return mapProperty(row, publicUrl, locale, content);
   });
-}, ["published-properties-localized-v3-field-fallback"], { revalidate: 60, tags: ["properties"] });
+}, ["published-properties-market-area-v1"], { revalidate: 60, tags: ["properties"] });
 
 export async function getPublishedProperties(filters: PropertyFilters = {}, locale: Locale = defaultLocale) {
   const fixtures = requireBackendOrFixtures(locale);
   const all = fixtures ?? (await fetchPublished(locale));
   return all.filter((property) =>
-    (!filters.location || property.location.toLowerCase() === filters.location.toLowerCase()) &&
+    matchesMarketArea(property, filters.area || parseMarketArea(filters.location)) &&
+    (!filters.location || parseMarketArea(filters.location) || property.location.toLowerCase() === filters.location.toLowerCase()) &&
     (!filters.type || property.propertyType === filters.type) &&
     (!filters.listingType || property.offers.some(offer => offer.offerType === filters.listingType)) &&
     (!filters.availability || property.availability === filters.availability) && matchesPrice(property.offers, filters),

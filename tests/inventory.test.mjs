@@ -9,6 +9,8 @@ function loadTs(file) {
   const filename = path.resolve(file);
   const instance = new Module(filename);
   instance.paths = Module._nodeModulePaths(path.dirname(filename));
+  const originalRequire = instance.require.bind(instance);
+  instance.require = specifier => specifier.startsWith(".") ? loadTs(path.resolve(path.dirname(filename), `${specifier}.ts`)) : originalRequire(specifier);
   instance._compile(ts.transpileModule(readFileSync(filename, "utf8"), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 },
   }).outputText, filename);

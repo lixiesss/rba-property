@@ -1,15 +1,18 @@
 
 import { getI18n } from "@/lib/i18n/server";
 import { PriceInputs } from "@/components/home/PriceInputs";
+import { marketAreas } from "@/lib/market-areas";
+import { getPublishedProperties } from "@/lib/data/properties";
 
-export async function PropertySearch({ catalogue = false, values = {}, locations = ["Uluwatu", "Ubud", "Pererenan", "Canggu"] }: { catalogue?: boolean; values?: Record<string, string>; locations?: string[] }) {
-  const { t, href } = await getI18n();
+export async function PropertySearch({ catalogue = false, values = {}, areas }: { catalogue?: boolean; values?: Record<string, string>; areas?: string[] }) {
+  const { t, href, locale } = await getI18n();
+  const available = areas ?? (await getPublishedProperties({}, locale)).flatMap(property => property.marketArea ? [property.marketArea] : []);
   return (
     <section aria-label={t("Search properties")} className={catalogue ? "catalogue-search" : "home-search relative z-20"}>
       <div className={catalogue ? "" : "page-shell"}>
         <form action={href("/properties")} className="property-search">
           <h2 id="search-title" className="sr-only">{t("Search properties")}</h2>
-          <SearchSelect label={t("Location")} name="location" value={values.location} options={[["", "All locations"], ...locations.map((location): [string, string] => [location.toLowerCase(), location])]} />
+          <SearchSelect label={t("Area")} name="area" value={values.area} options={[["", "All areas"], ...marketAreas.filter(([key]) => available.includes(key) || values.area === key).map(([key,label]): [string,string] => [key,label])]} />
           <SearchSelect label={t("Property type")} name="type" value={values.type} options={[["", "All types"], ["villa", "Villa"], ["land", "Land"], ["investment", "Investment property"]]} />
           <SearchSelect label={t("Offer")} name="listing" value={values.listing} options={[["", "Sale & lease"], ["sale", "Sale"], ["lease", "Lease"]]} />
           <SearchSelect label={t("Price basis")} name="priceBasis" value={values.priceBasis || "global"} options={[["global", "Total price"], ["per_are", "Per are"], ["per_are_per_year", "Per are / year"]]} />

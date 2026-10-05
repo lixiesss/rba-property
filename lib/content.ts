@@ -3,7 +3,7 @@ export const locations = [
   { name: "Ubud", image: "/images/land-ubud.png", count: "Land and retreats", className: "md:col-span-5" },
   { name: "Pererenan", image: "/images/villa-pererenan.png", count: "Village living near the coast", className: "md:col-span-5" },
   { name: "Canggu", image: "/images/brand-story.png", count: "Villas and investment property", className: "md:col-span-5" },
-  { name: "Tabanan", image: "/images/land-ubud.png", count: "Larger land opportunities", className: "md:col-span-7" },
+  { name: "Tegallalang", image: "/images/land-ubud.png", count: "Larger land opportunities", className: "md:col-span-7" },
 ];
 
 export const faqs = [

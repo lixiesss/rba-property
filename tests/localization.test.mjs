@@ -22,6 +22,26 @@ const { localizedPath, translationReady } = loadTs("lib/i18n/config.ts");
 const { localizedContent } = loadTs("lib/i18n/property-content.ts");
 const { localeMetadata } = loadTs("lib/i18n/metadata.ts");
 const { parseLocalizedPropertyForm } = loadTs("lib/validation/property.ts");
+const { parseMarketArea, matchesMarketArea } = loadTs("lib/market-areas.ts");
+const { getWhatsAppUrl, whatsappMessages } = loadTs("lib/whatsapp.ts");
+
+test("market areas use canonical keys without restricting the default catalogue", () => {
+  const properties = [{ marketArea: "ubud", location: "Sayan, Ubud" }, { marketArea: "ubud", location: "Glogor / Bisma Dua, Lodtunduh, Ubud" }, { marketArea: "tegallalang", location: "Manuaba, Kenderan, Tegallalang" }, {}];
+  assert.equal(properties.filter(property => matchesMarketArea(property)).length, 4);
+  assert.equal(properties.filter(property => matchesMarketArea(property, "ubud")).length, 2);
+  assert.equal(properties.filter(property => matchesMarketArea(property, "tegallalang")).length, 1);
+  assert.equal(parseMarketArea("Ubud"), "ubud");
+  assert.equal(parseMarketArea("Sayan, Ubud"), undefined);
+});
+test("WhatsApp links use the same number and exactly one encoded locale message", () => {
+  for (const locale of ["id", "en"]) {
+    const url = new URL(getWhatsAppUrl(locale));
+    assert.equal(url.hostname, "wa.me");
+    assert.equal(url.pathname, "/6282139927129");
+    assert.equal(url.searchParams.get("text"), whatsappMessages[locale]);
+    assert.equal([...url.searchParams].length, 1);
+  }
+});
 
 test("locale routes preserve canonical filters, slug and fragment", () => {
   assert.equal(localizedPath("/id/properties/same-slug?type=land&listing=sale#inquiry", "en"), "/en/properties/same-slug?type=land&listing=sale#inquiry");
@@ -101,9 +121,23 @@ test("translation migration backfill, atomic saves, locale readiness and RLS", {
     await db.exec(readFileSync("supabase/migrations/202610010002_property_translations.sql", "utf8"));
     await db.exec(readFileSync("supabase/migrations/202610020001_translation_public_read.sql", "utf8"));
     await db.exec("update properties set publication_status='published',published_at=now()");
-    const existingInventory = (await db.query("select * from properties order by id")).rows;
+    const beforeLocationMigration = (await db.query("select * from properties order by id")).rows;
     await db.exec(readFileSync("supabase/migrations/202610050001_draft_optional_location.sql", "utf8"));
-    assert.deepEqual((await db.query("select * from properties order by id")).rows, existingInventory, "location migration leaves existing inventory untouched");
+    assert.deepEqual((await db.query("select * from properties order by id")).rows, beforeLocationMigration, "location migration leaves existing inventory untouched");
+    const backfillCases = [["Sayan, Ubud", "ubud"], ["Glogor / Bisma Dua, Lodtunduh, Ubud", "ubud"], ["Manuaba, Kenderan, Tegallalang", "tegallalang"], ["Tegallalang, Gianyar - north of Ceking Rice Terrace", "tegallalang"], [null, null], ["Ubud / Canggu", null]];
+    for (let index=0; index<backfillCases.length; index++) await db.query("insert into properties(slug,title,description,location,property_type,land_size_m2) values ($1,'Backfill test','Test description',$2,'land',400)", [`area-backfill-${index}`, backfillCases[index][0]]);
+    const areaMigration = readFileSync("supabase/migrations/202610050002_property_market_area.sql", "utf8");
+    await db.exec(areaMigration);
+    for (let index=0; index<backfillCases.length; index++) assert.equal((await db.query("select market_area from properties where slug=$1", [`area-backfill-${index}`])).rows[0].market_area, backfillCases[index][1]);
+    for (let index=0; index<4; index++) {
+      await db.query("insert into property_offers(property_id,offer_type,price,currency) select id,'sale',100000000,'IDR' from properties where slug=$1", [`area-backfill-${index}`]);
+      await db.query("update properties set publication_status='published',published_at=now() where slug=$1", [`area-backfill-${index}`]);
+    }
+    await db.exec("grant select on properties to anon; set role anon;");
+    for (const area of ["ubud", "tegallalang"]) assert.equal((await db.query("select count(*)::int as n from properties where market_area=$1 and slug like 'area-backfill-%'", [area])).rows[0].n, 2, "each broad area includes both detailed published locations");
+    assert.equal((await db.query("select count(*)::int as n from properties where slug like 'area-backfill-%'")).rows[0].n, 4, "unclassified draft fixtures stay excluded");
+    await db.exec("reset role;");
+    const existingInventory = (await db.query("select * from properties order by id")).rows;
     assert.equal((await db.query("select count(*)::int as n from property_translations where locale='id'")).rows[0].n, 0);
     assert.equal((await db.query("select count(*)::int as n from property_translations t join properties p on p.id=t.property_id where t.locale='en' and t.title=p.title")).rows[0].n, 3);
     await db.exec(`insert into auth.users values ('20000000-0000-4000-8000-000000000001');
@@ -134,6 +168,10 @@ test("translation migration backfill, atomic saves, locale readiness and RLS", {
       await assert.rejects(save(draftId, { location: null }), /published_requires_location/, "published saves must retain location");
     }
     const id = (await save(null, payload)).rows[0].id;
+    await db.query("select save_property_market_inventory($1,$2::jsonb,$3::jsonb,$4::jsonb)", [id, JSON.stringify({ market_area: "ubud" }), JSON.stringify(offers), JSON.stringify(translations)]);
+    assert.equal((await db.query("select market_area from properties where id=$1", [id])).rows[0].market_area, "ubud", "admin save persists selected area");
+    await db.exec(areaMigration.slice(areaMigration.indexOf("with candidates"), areaMigration.indexOf("-- Extend")));
+    assert.equal((await db.query("select market_area from properties where id=$1", [id])).rows[0].market_area, "ubud", "backfill never overwrites a manually selected area");
     await db.query("insert into property_images(property_id,storage_path,is_thumbnail) values ($1,'localization/photo.webp',true)", [id]);
     await db.query("insert into property_videos(property_id,storage_path) values ($1,'localization/video.mp4')", [id]);
     const snapshot = async () => (await db.query("select id,storage_path,is_thumbnail,sort_order from property_images where property_id=$1", [id])).rows;

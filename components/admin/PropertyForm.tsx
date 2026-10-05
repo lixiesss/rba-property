@@ -1,5 +1,6 @@
 "use client";
 import { useI18n } from "@/lib/i18n/client";
+import { marketAreas } from "@/lib/market-areas";
 
 
 import Link from "next/link";
@@ -65,6 +66,7 @@ export function PropertyForm({
       </EditorSection>
 
       <EditorSection title={t("Location")}>
+        <label className="admin-field"><span>{t("Market Area")}</span><select name="market_area" defaultValue={text(property.market_area)}><option value="">{t("Not selected")}</option>{marketAreas.map(([key,label]) => <option key={key} value={key}>{t(label)}</option>)}</select></label>
         <Field label={t("Location")} name="location" defaultValue={property.location} onChange={event => setLocation(event.target.value)} hint={!location.trim() ? t("Location is required before publishing this property.") : undefined} />
         <Field label={t("District")} name="district" defaultValue={property.district} />
         <Field label={t("Address")} name="address" defaultValue={property.address} full />

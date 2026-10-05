@@ -1,4 +1,7 @@
 export const id = {
+  "Area": "Area", "All areas": "Semua area", "Market Area": "Area Utama", "Not selected": "Belum dipilih", "Other": "Lainnya",
+  "Market Area is required before publishing this property.": "Area utama wajib dipilih sebelum properti dipublikasikan.",
+  "No properties currently available.": "Belum ada properti tersedia.",
   "Location is required before publishing this property.": "Lokasi wajib diisi sebelum properti dipublikasikan.",
   "Incomplete translation. Missing fields use the other language or legacy content. Publication controls visibility.": "Terjemahan belum lengkap. Kolom kosong menggunakan bahasa lain atau konten lama. Status publikasi menentukan visibilitas.",
   "Indonesian content is incomplete. The Indonesian site will use complete English content.": "Konten Indonesia belum lengkap. Situs Indonesia akan menggunakan konten English yang lengkap.",

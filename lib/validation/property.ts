@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseMarketArea } from "../market-areas";
 
 const optionalNumber = z.preprocess(
   (value) => value === "" || value === null ? undefined : value,
@@ -23,6 +24,7 @@ export const propertyFormSchema = z.object({
   description: z.string().trim().min(10),
   offers: z.array(offerSchema).max(2).refine(offers => new Set(offers.map(o => o.offer_type)).size === offers.length, "Offer types must be unique"),
   property_type: z.enum(["villa", "land", "investment"]),
+  market_area: z.preprocess(value => value === "" || value === undefined ? null : value, z.string().nullable().refine(value => value === null || parseMarketArea(value) === value, "Invalid market area")),
   location: z.preprocess(value => value === null ? "" : value, z.string().trim().max(100).default("").refine(value => !value || value.length >= 2, "Location must contain at least two characters")),
   district: z.string().trim().max(100).default(""),
   address: z.string().trim().max(300).optional(),
