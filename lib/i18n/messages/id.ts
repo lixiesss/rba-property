@@ -1,4 +1,5 @@
 export const id = {
+  "Location is required before publishing this property.": "Lokasi wajib diisi sebelum properti dipublikasikan.",
   "Incomplete translation. Missing fields use the other language or legacy content. Publication controls visibility.": "Terjemahan belum lengkap. Kolom kosong menggunakan bahasa lain atau konten lama. Status publikasi menentukan visibilitas.",
   "Indonesian content is incomplete. The Indonesian site will use complete English content.": "Konten Indonesia belum lengkap. Situs Indonesia akan menggunakan konten English yang lengkap.",
   "Language": "Bahasa", "Admin language": "Bahasa admin", "Enter a valid email and password": "Masukkan email dan kata sandi yang valid", "Invalid login credentials": "Email atau kata sandi tidak sesuai", "Update failed": "Pembaruan gagal",

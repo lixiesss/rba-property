@@ -68,6 +68,20 @@ test("draft validation accepts independent incomplete content and preserves cano
   assert.equal("title" in result.data, false, "legacy content is not an application write source");
 });
 
+test("Land and Villa drafts accept missing location without placeholder values", () => {
+  for (const type of ["land", "villa"]) {
+    for (const location of ["", "   ", null]) {
+      const data = new FormData();
+      for (const [key, value] of Object.entries({ slug: `draft-${type}`, property_type: type, land_size_value: "400", land_size_unit: "m2", availability_status: "available" })) data.set(key, value);
+      if (location !== null) data.set("location", location);
+      const parsed = parseLocalizedPropertyForm(data);
+      assert.equal(parsed.success, true);
+      assert.equal(parsed.data.location, null);
+      assert.equal(parsed.data.offers.length, 0);
+    }
+  }
+});
+
 test("translation migration backfill, atomic saves, locale readiness and RLS", { skip: !process.env.RBA_PGLITE_MODULE }, async () => {
   const { PGlite } = await import(pathToFileURL(process.env.RBA_PGLITE_MODULE).href);
   const db = new PGlite();
@@ -86,6 +100,10 @@ test("translation migration backfill, atomic saves, locale readiness and RLS", {
     await db.exec(readFileSync("supabase/migrations/202610010001_inventory_offers_videos.sql", "utf8"));
     await db.exec(readFileSync("supabase/migrations/202610010002_property_translations.sql", "utf8"));
     await db.exec(readFileSync("supabase/migrations/202610020001_translation_public_read.sql", "utf8"));
+    await db.exec("update properties set publication_status='published',published_at=now()");
+    const existingInventory = (await db.query("select * from properties order by id")).rows;
+    await db.exec(readFileSync("supabase/migrations/202610050001_draft_optional_location.sql", "utf8"));
+    assert.deepEqual((await db.query("select * from properties order by id")).rows, existingInventory, "location migration leaves existing inventory untouched");
     assert.equal((await db.query("select count(*)::int as n from property_translations where locale='id'")).rows[0].n, 0);
     assert.equal((await db.query("select count(*)::int as n from property_translations t join properties p on p.id=t.property_id where t.locale='en' and t.title=p.title")).rows[0].n, 3);
     await db.exec(`insert into auth.users values ('20000000-0000-4000-8000-000000000001');
@@ -97,6 +115,24 @@ test("translation migration backfill, atomic saves, locale readiness and RLS", {
     const offers = [{ offer_type: "sale", price: 260000000, currency: "IDR", price_basis: "per_are", sort_order: 0 }];
     const translations = [{ locale: "id", title: "Tanah Uluwatu", short_description: "Tanah pilihan", description: "Deskripsi tanah Uluwatu" }, { locale: "en", title: "", short_description: "", description: "" }];
     const save = (id, values, content = translations) => db.query("select save_localized_property_inventory($1,$2::jsonb,$3::jsonb,$4::jsonb) as id", [id, JSON.stringify(values), JSON.stringify(offers), JSON.stringify(content)]);
+    for (const type of ["land", "villa"]) {
+      const draft = { ...payload, slug: `missing-location-${type}`, property_type: type, location: null };
+      const emptyContent = ["id", "en"].map(locale => ({ locale, title: "", short_description: "", description: "" }));
+      const result = await db.query("select save_localized_property_inventory(null,$1::jsonb,'[]'::jsonb,$2::jsonb) as id", [JSON.stringify(draft), JSON.stringify(emptyContent)]);
+      const draftId = result.rows[0].id;
+      assert.equal((await db.query("select location from properties where id=$1", [draftId])).rows[0].location, null);
+      await save(draftId, { ...draft, location: "Ubud" });
+      await save(draftId, draft);
+      assert.equal((await db.query("select location from properties where id=$1", [draftId])).rows[0].location, null, "clearing existing draft location persists NULL");
+      await db.query("insert into property_images(property_id,storage_path,is_thumbnail) values ($1,$2,true)", [draftId, `draft-location/${type}.webp`]);
+      for (const location of [null, "", "   "]) {
+        await assert.rejects(save(draftId, { ...draft, location, publication_status: "published", published_at: new Date().toISOString() }), /published_requires_location/);
+      }
+      assert.equal((await db.query("select publication_status from properties where id=$1", [draftId])).rows[0].publication_status, "draft");
+      await save(draftId, { ...draft, location: "Ubud", publication_status: "published", published_at: new Date().toISOString() });
+      assert.equal((await db.query("select publication_status from properties where id=$1", [draftId])).rows[0].publication_status, "published");
+      await assert.rejects(save(draftId, { location: null }), /published_requires_location/, "published saves must retain location");
+    }
     const id = (await save(null, payload)).rows[0].id;
     await db.query("insert into property_images(property_id,storage_path,is_thumbnail) values ($1,'localization/photo.webp',true)", [id]);
     await db.query("insert into property_videos(property_id,storage_path) values ($1,'localization/video.mp4')", [id]);
@@ -160,5 +196,7 @@ test("translation migration backfill, atomic saves, locale readiness and RLS", {
       assert.equal((await db.query("select id from properties where id=$1", [id])).rows.length, 0, `${status} remains private`);
       assert.equal((await db.query("select * from property_translations where property_id=$1", [id])).rows.length, 0, `${status} translations remain private`);
     }
+    await db.exec("reset role; set request.jwt.claim.sub='';");
+    assert.deepEqual((await db.query("select * from properties where id=any($1::uuid[]) order by id", [existingInventory.map(row => row.id)])).rows, existingInventory, "existing published inventory remains unchanged");
   } finally { await db.close(); }
 });

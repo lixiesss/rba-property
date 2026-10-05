@@ -69,6 +69,7 @@ export async function updateProperty(id: string, formData: FormData) {
   if (intent === "archive") publicationStatus = "archived";
 
   if (publicationStatus === "published") {
+    if (!parsed.data.location) redirect(`/admin/properties/${id}/edit?error=${encodeURIComponent("Location is required before publishing this property.")}`);
     if (!parsed.data.offers.length) redirect(`/admin/properties/${id}/edit?error=At+least+one+offer+is+required+before+publishing`);
     const { count } = await supabase
       .from("property_images")
@@ -106,7 +107,8 @@ export async function setPropertyPublication(id: string, status: "draft" | "publ
       supabase.from("property_images").select("id", { count: "exact", head: true }).eq("property_id", id).eq("is_thumbnail", true),
       supabase.from("property_offers").select("id", { count: "exact", head: true }).eq("property_id", id),
     ]);
-    if (!property || !property.slug || !property.location || !offerCount || !count) {
+    if (property && !property.location?.trim()) redirect(`/admin/properties/${id}/edit?error=${encodeURIComponent("Location is required before publishing this property.")}`);
+    if (!property || !property.slug || !offerCount || !count) {
       redirect(`/admin/properties/${id}/edit?error=${encodeURIComponent("Complete required fields and add an offer and thumbnail before publishing")}`);
     }
   }

@@ -23,7 +23,7 @@ export const propertyFormSchema = z.object({
   description: z.string().trim().min(10),
   offers: z.array(offerSchema).max(2).refine(offers => new Set(offers.map(o => o.offer_type)).size === offers.length, "Offer types must be unique"),
   property_type: z.enum(["villa", "land", "investment"]),
-  location: z.string().trim().min(2).max(100),
+  location: z.preprocess(value => value === null ? "" : value, z.string().trim().max(100).default("").refine(value => !value || value.length >= 2, "Location must contain at least two characters")),
   district: z.string().trim().max(100).default(""),
   address: z.string().trim().max(300).optional(),
   latitude: optionalNumber.refine((value) => value === undefined || (value >= -90 && value <= 90), "Invalid latitude"),
@@ -85,6 +85,7 @@ export function parsePropertyForm(formData: FormData) {
     success: true as const,
     data: {
       ...value,
+      location: nullable(value.location),
       address: nullable(value.address),
       latitude: value.latitude ?? null,
       longitude: value.longitude ?? null,

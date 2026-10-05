@@ -31,6 +31,7 @@ export function PropertyForm({
   const { t } = useI18n();
   const status = text(property.publication_status || "draft");
   const [propertyType, setPropertyType] = useState(text(property.property_type || "villa"));
+  const [location, setLocation] = useState(text(property.location));
   const [contentLocale, setContentLocale] = useState<Locale>("id");
   const [content, setContent] = useState<Record<Locale, PropertyTranslation>>(() => Object.fromEntries(locales.map(locale => {
     const initial = Array.isArray(property.property_translations) ? property.property_translations.find(value => value.locale === locale) : undefined;
@@ -64,7 +65,7 @@ export function PropertyForm({
       </EditorSection>
 
       <EditorSection title={t("Location")}>
-        <Field label={t("Location")} name="location" defaultValue={property.location} required />
+        <Field label={t("Location")} name="location" defaultValue={property.location} onChange={event => setLocation(event.target.value)} hint={!location.trim() ? t("Location is required before publishing this property.") : undefined} />
         <Field label={t("District")} name="district" defaultValue={property.district} />
         <Field label={t("Address")} name="address" defaultValue={property.address} full />
         <Field label={t("Google Maps URL")} name="map_url" type="url" defaultValue={property.map_url} full />
