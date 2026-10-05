@@ -482,6 +482,9 @@ details > summary::-webkit-details-marker {
   border-radius: 8px;
 }
 .property-gallery-media { width: 100%; }
+.property-gallery-skeleton { aspect-ratio: 1; max-height: 58svh; display: grid; place-items: center; background: var(--sandstone); border-radius: 8px; animation: gallery-pulse 1.8s ease-in-out infinite; }
+@keyframes gallery-pulse { 50% { opacity: 0.75; } }
+@media (prefers-reduced-motion: reduce) { .property-gallery-skeleton { animation: none; } }
 .property-gallery-image { display: block; width: 100%; height: auto; object-fit: contain; }
 .property-gallery > p { text-align: center; }
 .property-gallery .gallery-button-prev { left: 0.75rem; }
